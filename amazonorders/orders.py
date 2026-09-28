@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup, Tag
 from amazonorders import util
 from amazonorders.conf import AmazonOrdersConfig
 from amazonorders.entity.order import Order
+from amazonorders.entity.tracking import Tracking
 from amazonorders.exception import AmazonOrdersError, AmazonOrdersNotFoundError
 from amazonorders.session import AmazonSession
 
@@ -158,6 +159,53 @@ class AmazonOrders:
         if not order:
             raise AmazonOrdersError("Could not parse Order details. Check if Amazon changed the HTML.")
         return order
+
+    @staticmethod
+    def parse_tracking(html: str,
+                       config: AmazonOrdersConfig) -> Tracking:
+        """
+        Parse an already-fetched Amazon package tracking page (the page a
+        :attr:`~amazonorders.entity.shipment.Shipment.tracking_link` points to) into a Tracking, without a
+        session driving the fetch.
+
+        :param html: The package tracking page HTML to parse.
+        :param config: The config providing the selectors used for parsing.
+        :return: The parsed Tracking.
+        """
+        parsed = BeautifulSoup(html, config.bs4_parser)
+        tracking_tag = util.select_one(parsed, config.selectors.TRACKING_ENTITY_SELECTOR)
+        if not tracking_tag:
+            raise AmazonOrdersError("Could not parse package tracking. Check if Amazon changed the HTML.")
+        return Tracking(tracking_tag, config)
+
+    def get_tracking(self,
+                     tracking_link: str) -> Tracking:
+        """
+        Get the carrier and tracking number for a Shipment, from the page its
+        :attr:`~amazonorders.entity.shipment.Shipment.tracking_link` points to. This executes one request per
+        call. Amazon stops showing the tracking link on older Orders, so it is not available for them.
+
+        :param tracking_link: The Shipment's tracking link (absolute, or relative to the Amazon base URL).
+        :return: The requested Tracking.
+        """
+        if not self.amazon_session.is_authenticated:
+            raise AmazonOrdersError("Call AmazonSession.login() to authenticate first.")
+
+        if not tracking_link.startswith("http"):
+            tracking_link = f"{self.config.constants.BASE_URL}{tracking_link}"
+
+        tracking_response = self.amazon_session.get(tracking_link)
+        self.amazon_session.check_response(tracking_response)
+
+        if self.config.constants.TRACKING_ROUTE not in tracking_response.response.url:
+            raise AmazonOrdersNotFoundError("Amazon redirected, which likely means the package tracking was not "
+                                            "found.")
+
+        tracking_tag = util.select_one(tracking_response.parsed, self.config.selectors.TRACKING_ENTITY_SELECTOR)
+        if not tracking_tag:
+            raise AmazonOrdersError("Could not parse package tracking. Check if Amazon changed the HTML.")
+
+        return Tracking(tracking_tag, self.config)
 
     def get_order(self,
                   order_id: str,

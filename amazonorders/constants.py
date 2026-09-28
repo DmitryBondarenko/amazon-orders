@@ -114,6 +114,8 @@ class Constants:
     HISTORY_FILTER_QUERY_PARAM = "timeFilter"
     ORDER_FILTER_QUERY_PARAM = "orderFilter"
     WHOLE_FOODS_DETAILS_ROUTES = ["/fopo/order-details", "/wholefoodsmarket/receipts/order/"]
+    TRACKING_ROUTE = "/progress-tracker/package"
+    TRACKING_URL = f"{BASE_URL}{TRACKING_ROUTE}"
 
     ##########################################################################
     # URLs for Transactions
@@ -221,6 +223,7 @@ class Constants:
         self.ORDER_HISTORY_URL = f"{base_url}/your-orders/orders"
         self.ORDER_DETAILS_URL = f"{base_url}/gp/your-account/order-details"
         self.ORDER_INVOICE_URL = f"{base_url}/gp/css/summary/print.html"
+        self.TRACKING_URL = f"{base_url}{self.TRACKING_ROUTE}"
         self.TRANSACTION_HISTORY_URL = f"{base_url}{self.TRANSACTION_HISTORY_ROUTE}"
 
         host = urlparse(base_url).netloc.lower().split(":")[0]

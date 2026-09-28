@@ -1412,3 +1412,63 @@ class TestOrders(UnitTestCase):
             self.assertIsNotNone(item.link)
             self.assertIsNotNone(item.asin)
             self.assertIsNotNone(item.image_link)
+
+    def test_get_tracking_unauthenticated(self):
+        # WHEN
+        with self.assertRaises(AmazonOrdersError) as cm:
+            self.amazon_orders.get_tracking("/progress-tracker/package?orderId=112-0000000-0000000")
+
+        self.assertEqual("Call AmazonSession.login() to authenticate first.", str(cm.exception))
+
+    @responses.activate
+    def test_get_tracking(self):
+        # GIVEN
+        self.amazon_session.is_authenticated = True
+        with open(os.path.join(self.RESOURCES_DIR, "tracking", "progress-tracker-ups.html"), "r",
+                  encoding="utf-8") as f:
+            resp = responses.add(responses.GET, f"{self.test_config.constants.TRACKING_URL}", body=f.read(),
+                                 status=200)
+
+        # WHEN
+        tracking = self.amazon_orders.get_tracking(
+            "/progress-tracker/package?orderId=112-0000000-0000000&shipmentId=AbCdEfGhI&packageIndex=0")
+
+        # THEN
+        self.assertEqual(1, resp.call_count)
+        self.assertIn("shipmentId=AbCdEfGhI", resp.calls[0].request.url)
+        self.assertEqual("UPS", tracking.carrier)
+        self.assertEqual("1Z999AA10123456784", tracking.tracking_number)
+
+    @responses.activate
+    def test_get_tracking_not_found(self):
+        # GIVEN
+        self.amazon_session.is_authenticated = True
+        # A redirect away from the tracking page (not to login) simulates tracking that doesn't exist
+        responses.add(responses.GET, f"{self.test_config.constants.TRACKING_URL}", status=302,
+                      headers={"Location": f"{self.test_config.constants.BASE_URL}/your-orders/orders"})
+        with open(os.path.join(self.RESOURCES_DIR, "orders", "order-history-2018-0.html"), "r",
+                  encoding="utf-8") as f:
+            responses.add(responses.GET, self.test_config.constants.ORDER_HISTORY_URL, body=f.read(), status=200)
+
+        # WHEN
+        with self.assertRaises(AmazonOrdersNotFoundError) as cm:
+            self.amazon_orders.get_tracking(
+                f"{self.test_config.constants.TRACKING_URL}?orderId=112-0000000-0000000&shipmentId=missing")
+
+        # THEN
+        self.assertIn("package tracking was not found", str(cm.exception))
+
+    @responses.activate
+    def test_get_tracking_session_expires(self):
+        # GIVEN
+        self.amazon_session.is_authenticated = True
+        self.given_authenticated_url_redirects_to_login()
+        self.given_login_responses_success()
+
+        # WHEN
+        with self.assertRaises(AmazonOrdersAuthRedirectError) as cm:
+            self.amazon_orders.get_tracking("/progress-tracker/package?orderId=112-0000000-0000000")
+
+        # THEN
+        self.assertIn("Amazon redirected to login.", str(cm.exception))
+        self.assertFalse(self.amazon_session.is_authenticated)

@@ -208,7 +208,8 @@ class Selectors:
     #####################################
 
     FIELD_SHIPMENT_TRACKING_LINK_SELECTOR = ["span.track-package-button a",
-                                             "a[href*='ship-track?itemId=']"]
+                                             "a[href*='ship-track?itemId=']",
+                                             "a[href*='/progress-tracker/package']"]
     FIELD_SHIPMENT_DELIVERY_STATUS_SELECTOR = ["div.js-shipment-info-container div.a-row",
                                                "span.delivery-box__primary-text",
                                                ".yohtmlc-shipment-status-primaryText",
@@ -234,6 +235,15 @@ class Selectors:
 
     FIELD_SELLER_NAME_SELECTOR = ["a", "span"]
     FIELD_SELLER_LINK_SELECTOR = "a"
+
+    #####################################
+    # CSS selectors for Tracking fields
+    #####################################
+
+    TRACKING_ENTITY_SELECTOR = ["div.pt-main-container",
+                                "#pt-page-container-inner"]
+    FIELD_TRACKING_NUMBER_SELECTOR = [".pt-delivery-card-trackingId"]
+    FIELD_TRACKING_CARRIER_SELECTOR = [".tracking-event-carrier-header"]
 
     #####################################
     # CSS selectors for Transaction fields
