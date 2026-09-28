@@ -39,6 +39,19 @@ class TestTracking(UnitTestCase):
         # THEN
         self.assertEqual({"carrier": "UPS", "tracking_number": "1Z999AA10123456784"}, tracking.to_dict())
 
+    def test_tracking_number_all_digits_stays_text(self):
+        # GIVEN
+        html = self._read("progress-tracker-ups.html").replace("1Z999AA10123456784", "0094001118992231000000")
+        html = html.replace("Shipped with UPS", "Shipped with USPS")
+
+        # WHEN
+        tracking = AmazonOrders.parse_tracking(html, self.test_config)
+
+        # THEN
+        self.assertEqual("USPS", tracking.carrier)
+        self.assertEqual("0094001118992231000000", tracking.tracking_number)
+        self.assertIsInstance(tracking.tracking_number, str)
+
     def test_tracking_fields_missing(self):
         # GIVEN
         parsed = BeautifulSoup("<div class=\"a-row pt-main-container\"></div>", self.test_config.bs4_parser)

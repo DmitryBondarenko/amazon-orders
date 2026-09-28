@@ -7,6 +7,7 @@ from typing import Optional
 
 from bs4 import Tag
 
+from amazonorders import util
 from amazonorders.conf import AmazonOrdersConfig
 from amazonorders.entity.parsable import Parsable
 
@@ -31,17 +32,26 @@ class Tracking(Parsable):
 
         #: The carrier name, e.g. ``UPS``, or ``Amazon`` for Amazon's own delivery network.
         self.carrier: Optional[str] = self.safe_parse(self._parse_carrier)
-        #: The carrier's tracking number, e.g. ``1Z999AA10123456784`` or ``TBA000000000000``.
-        self.tracking_number: Optional[str] = self.safe_simple_parse(
-            selector=self.config.selectors.FIELD_TRACKING_NUMBER_SELECTOR,
-            prefix_split=":",
-            prefix_split_fuzzy=True)
+        #: The carrier's tracking number, e.g. ``1Z999AA10123456784`` or ``TBA000000000000``. Always a ``str``,
+        #: since many (e.g. USPS) are all digits and may have leading zeros.
+        self.tracking_number: Optional[str] = self.safe_parse(self._parse_tracking_number)
 
     def __repr__(self) -> str:
         return f"<Tracking: \"{self.carrier} {self.tracking_number}\">"
 
     def __str__(self) -> str:  # pragma: no cover
         return f"Tracking: {self.carrier} {self.tracking_number}"
+
+    def _parse_tracking_number(self) -> Optional[str]:
+        # Read the text directly: simple_parse() would convert an all-digit number to an int
+        tag = util.select_one(self.parsed, self.config.selectors.FIELD_TRACKING_NUMBER_SELECTOR)
+        if not tag:
+            return None
+
+        value = tag.text.strip()
+        if ":" in value:
+            value = value.split(":", 1)[1].strip()
+        return value or None
 
     def _parse_carrier(self) -> Optional[str]:
         value = self.simple_parse(self.config.selectors.FIELD_TRACKING_CARRIER_SELECTOR)
