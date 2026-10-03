@@ -8,12 +8,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- Improved sign-in, session, and currency and date parsing for non-`.com` Amazon sites, including `amazon.co.jp`.
 - `Tracking` entity (`carrier`, `tracking_number`), and `AmazonOrders.get_tracking()` / `AmazonOrders.parse_tracking()` to read it from the page a `Shipment.tracking_link` points to.
 - `Shipment.shipment_id`, Amazon's identifier for the Shipment, taken from its tracking link.
 
 ### Fixed
 
-- `Shipment.tracking_link` was always `None` on current pages, since Amazon's "Track package" link moved to `/progress-tracker/package`.
+- Bug fixes and stability improvements.
 
 ## [4.6.0](https://github.com/alexdlaird/amazon-orders/compare/4.5.0...4.6.0) - 2026-09-10
 
