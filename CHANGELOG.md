@@ -4,13 +4,46 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/alexdlaird/amazon-orders/compare/4.6.0...HEAD)
+## [Unreleased](https://github.com/alexdlaird/amazon-orders/compare/4.7.1...HEAD)
+
+### Added
+
+- `Tracking` entity (`carrier`, `tracking_number`), and `AmazonOrders.get_tracking()` / `AmazonOrders.parse_tracking()` to read it from the page a `Shipment.tracking_link` points to.
+- `Shipment.shipment_id`, Amazon's identifier for the Shipment, taken from its tracking link.
+
+### Fixed
+
+- `Shipment.tracking_link` was always `None` on current pages, since Amazon's "Track package" link moved to `/progress-tracker/package`.
+
+## [4.7.1](https://github.com/alexdlaird/amazon-orders/compare/4.7.0...4.7.1) - 2026-10-07
+
+### Added
+
+- `AmazonGiftCards`, the `GiftCardActivity` entity, and the `gift-card-balance` and `gift-card-activity` CLI commands, for the Gift Card balance and activity.
+
+### Fixed
+
+- Bug fixes and stability improvements.
+
+## [4.7.0](https://github.com/alexdlaird/amazon-orders/compare/4.6.1...4.7.0) - 2026-10-06
+
+### Added
+
+- `parse_currency()`, `parse_date()`, `parse_count()`, and `parse_order_number()` on `Constants`, and page text attributes on `Selectors` (e.g. `FIELD_ORDER_GRAND_TOTAL_LABELS`), so every word and format the parsers use can be overridden.
+- `TransactionsPage`, `Transaction.from_fields()`, and the `transactions_page_class` and `transaction_class` config keys, to override how the Transactions page and its Transactions are parsed.
+- `language_package` config key, to use a separately published language package. See [the docs](https://amazon-orders.readthedocs.io/language-packages.html) for building one.
+- Currency symbols for more non-`.com` Amazon sites (e.g. `amazon.pl`, `amazon.com.tr`, `amazon.ae`).
+
+### Fixed
+
+- Bug fixes and stability improvements.
+
+## [4.6.1](https://github.com/alexdlaird/amazon-orders/compare/4.6.0...4.6.1) - 2026-10-03
 
 ### Added
 
 - Improved sign-in, session, and currency and date parsing for non-`.com` Amazon sites, including `amazon.co.jp`.
-- `Tracking` entity (`carrier`, `tracking_number`), and `AmazonOrders.get_tracking()` / `AmazonOrders.parse_tracking()` to read it from the page a `Shipment.tracking_link` points to.
-- `Shipment.shipment_id`, Amazon's identifier for the Shipment, taken from its tracking link.
+- `DECIMAL_SEPARATOR`, `THOUSANDS_SEPARATOR`, and `CURRENCY_FORMAT` on `Constants`, and currency parsing for either decimal mark (e.g. `$1,234.56`, `1.234,56 €`, `12,99 €`, or `CHF 1'234.50`).
 
 ### Fixed
 

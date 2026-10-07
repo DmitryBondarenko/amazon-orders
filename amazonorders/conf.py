@@ -1,3 +1,4 @@
+import importlib
 import inspect
 import logging
 import os
@@ -18,6 +19,16 @@ DEFAULT_CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".config", "amazonord
 config_file_lock = threading.Lock()
 cookies_file_lock = threading.Lock()
 debug_output_file_lock = threading.Lock()
+
+_LANGUAGE_PACKAGE_CLASSES = {
+    "constants_class": "Constants",
+    "selectors_class": "Selectors",
+    "order_class": "Order",
+    "shipment_class": "Shipment",
+    "item_class": "Item",
+    "transaction_class": "Transaction",
+    "transactions_page_class": "TransactionsPage",
+}
 
 
 class AmazonOrdersConfig:
@@ -40,6 +51,7 @@ class AmazonOrdersConfig:
 
         self._data: Dict[str, Any] = self._default_data()
         self._resolved_classes: Dict[str, Any] = {}
+        self._assigned_classes: Dict[str, Any] = {}
 
         with config_file_lock:
             if os.path.exists(self.config_path):
@@ -86,7 +98,10 @@ class AmazonOrdersConfig:
             "order_class": "amazonorders.entity.order.Order",
             "shipment_class": "amazonorders.entity.shipment.Shipment",
             "item_class": "amazonorders.entity.item.Item",
+            "transaction_class": "amazonorders.entity.transaction.Transaction",
             "output_class": "amazonorders.output.OutputFormatter",
+            "transactions_page_class": "amazonorders.transactions.TransactionsPage",
+            "language_package": None,
             "bs4_parser": "html.parser",
             "auth_forms_classes": [],
             # Timeout in seconds for browser-based challenge detection and resolution
@@ -104,25 +119,33 @@ class AmazonOrdersConfig:
     def _load_classes(self) -> None:
         """
         Instantiate the constants and selectors, which the auth layer itself uses and so are always
-        needed. The entity and output classes resolve on first use instead.
+        needed. The entity, output, and Transactions page classes resolve on first use instead.
         """
-        selectors_class_split = self.selectors_class.split(".")
+        selectors_class_split = self._class_path("selectors_class").split(".")
 
         self.constants = self._instantiate_constants()
         self.selectors = util.load_class(selectors_class_split[:-1], selectors_class_split[-1])()
 
     def _validate_class_paths(self) -> None:
         """
-        Check the shape of every lazily resolved class path at construction, so a malformed value
-        still fails here rather than at first use, without importing the modules they name.
+        Check the shape of every lazily resolved class path, and of the ``language_package``, at construction, so a
+        malformed value still fails here rather than at first use, without importing the modules they name.
 
-        :raises AmazonOrdersError: If a class path is not a dotted path to a class.
+        :raises AmazonOrdersError: If a class path is not a dotted path to a class, or the ``language_package`` is
+            not a dotted module path.
         """
-        for key in ("order_class", "shipment_class", "item_class", "output_class"):
+        for key in ("order_class", "shipment_class", "item_class", "transaction_class", "output_class",
+                    "transactions_page_class"):
             value = self._data.get(key)
             if (not isinstance(value, str) or "." not in value
                     or not all(part.isidentifier() for part in value.split("."))):
                 raise AmazonOrdersError(f"Config value for \"{key}\" is not a dotted class path: {value!r}")
+
+        language_package = self._data.get("language_package")
+        if language_package is not None and (not isinstance(language_package, str) or
+                                             not all(part.isidentifier() for part in language_package.split("."))):
+            raise AmazonOrdersError(f"Config value for \"language_package\" is not a dotted module path: "
+                                    f"{language_package!r}")
 
     def _resolve_class(self,
                        key: str) -> Any:
@@ -133,14 +156,58 @@ class AmazonOrdersConfig:
         :return: The resolved class.
         :raises AmazonOrdersError: If the configured class path cannot be imported.
         """
+        if key in self._assigned_classes:
+            return self._assigned_classes[key]
+
         if key not in self._resolved_classes:
-            class_split = self._data[key].split(".")
+            class_path = self._class_path(key)
+            class_split = class_path.split(".")
             try:
                 self._resolved_classes[key] = util.load_class(class_split[:-1], class_split[-1])
             except (AttributeError, ImportError) as e:
-                raise AmazonOrdersError(f"Could not resolve \"{key}\" ({self._data[key]}): {e}") from e
+                raise AmazonOrdersError(f"Could not resolve \"{key}\" ({class_path}): {e}") from e
 
         return self._resolved_classes[key]
+
+    def _class_path(self,
+                    key: str) -> str:
+        """
+        Get the class path for the given config key. A key left at its default uses the class of the same name
+        from the ``language_package``, if one is configured and defines it as a subclass of the default, so an
+        explicitly configured class always wins. A value equal to the default counts as unset, since :func:`save`
+        persists every default. A class of that name that isn't a subclass of the default (for instance, the default
+        itself, imported into the package) is ignored with a warning.
+
+        :param key: The config key naming the class.
+        :return: The class path.
+        :raises AmazonOrdersError: If the ``language_package`` cannot be imported.
+        """
+        class_path = self._data[key]
+        language_package = self._data.get("language_package")
+        if (key not in _LANGUAGE_PACKAGE_CLASSES or not language_package or
+                class_path != self._default_data()[key]):
+            return class_path
+
+        try:
+            package = importlib.import_module(language_package)
+        except ImportError as e:
+            raise AmazonOrdersError(f"Could not import \"language_package\" ({language_package}): {e}") from e
+
+        class_name = _LANGUAGE_PACKAGE_CLASSES[key]
+        package_class = getattr(package, class_name, None)
+        if package_class is None:
+            return class_path
+
+        class_split = class_path.split(".")
+        default_class: Any = util.load_class(class_split[:-1], class_split[-1])
+        if (not isinstance(package_class, type) or package_class is default_class or
+                not issubclass(package_class, default_class)):
+            logger.warning(f"\"language_package\" ({language_package}) defines {class_name}, but it isn't a subclass "
+                           f"of {class_path}, so {class_path} is used.")
+            return class_path
+
+        logger.debug(f"Using {language_package}.{class_name} for \"{key}\".")
+        return f"{language_package}.{class_name}"
 
     def _set_class(self,
                    key: str,
@@ -152,7 +219,28 @@ class AmazonOrdersConfig:
         :param key: The config key naming the class.
         :param value: The class to use.
         """
-        self._resolved_classes[key] = value
+        self._assigned_classes[key] = value
+
+    def _validate_bs4_parser(self) -> None:
+        try:
+            BeautifulSoup("", str(self._data["bs4_parser"]))
+        except FeatureNotFound:
+            logger.debug(
+                f"Configured bs4_parser '{self._data['bs4_parser']}' is unavailable; "
+                f"using the default 'html.parser'. To use it, install the parser "
+                f"(e.g. `pip install amazon-orders[lxml]`)."
+            )
+            self._data["bs4_parser"] = "html.parser"
+
+    def _instantiate_constants(self) -> Any:
+        constants_class_split = self._class_path("constants_class").split(".")
+        constants_cls = util.load_class(constants_class_split[:-1], constants_class_split[-1])
+        # Pass ``self`` only when the constants class accepts a config arg, to keep backward
+        # compatibility with existing zero-arg ``constants_class`` subclasses.
+        init_params = inspect.signature(constants_cls.__init__).parameters
+        if len(init_params) > 1:
+            return constants_cls(self)
+        return constants_cls()
 
     @property
     def order_cls(self) -> Any:
@@ -185,6 +273,16 @@ class AmazonOrdersConfig:
         self._set_class("item_class", value)
 
     @property
+    def transaction_cls(self) -> Any:
+        """The :class:`~amazonorders.entity.transaction.Transaction` class in use."""
+        return self._resolve_class("transaction_class")
+
+    @transaction_cls.setter
+    def transaction_cls(self,
+                        value: Any) -> None:
+        self._set_class("transaction_class", value)
+
+    @property
     def output_cls(self) -> Any:
         """The :class:`~amazonorders.output.OutputFormatter` class in use."""
         return self._resolve_class("output_class")
@@ -194,26 +292,15 @@ class AmazonOrdersConfig:
                    value: Any) -> None:
         self._set_class("output_class", value)
 
-    def _validate_bs4_parser(self) -> None:
-        try:
-            BeautifulSoup("", str(self._data["bs4_parser"]))
-        except FeatureNotFound:
-            logger.debug(
-                f"Configured bs4_parser '{self._data['bs4_parser']}' is unavailable; "
-                f"using the default 'html.parser'. To use it, install the parser "
-                f"(e.g. `pip install amazon-orders[lxml]`)."
-            )
-            self._data["bs4_parser"] = "html.parser"
+    @property
+    def transactions_page_cls(self) -> Any:
+        """The :class:`~amazonorders.transactions.TransactionsPage` class in use."""
+        return self._resolve_class("transactions_page_class")
 
-    def _instantiate_constants(self) -> Any:
-        constants_class_split = self.constants_class.split(".")
-        constants_cls = util.load_class(constants_class_split[:-1], constants_class_split[-1])
-        # Pass ``self`` only when the constants class accepts a config arg, to keep backward
-        # compatibility with existing zero-arg ``constants_class`` subclasses.
-        init_params = inspect.signature(constants_cls.__init__).parameters
-        if len(init_params) > 1:
-            return constants_cls(self)
-        return constants_cls()
+    @transactions_page_cls.setter
+    def transactions_page_cls(self,
+                              value: Any) -> None:
+        self._set_class("transactions_page_class", value)
 
     def set_domain(self,
                    domain: str) -> None:
@@ -235,17 +322,17 @@ class AmazonOrdersConfig:
         return key in self._data
 
     def __getstate__(self) -> Dict[str, Any]:
-        return self._data
+        return {"config_path": self.config_path, "_data": self._data, "_assigned_classes": self._assigned_classes}
 
     def __setstate__(self,
                      state: Dict[str, Any]) -> None:
-        self._data = state
+        self.__dict__.update(state)
         self._resolved_classes = {}
         self._load_classes()
 
     def update_config(self,
                       key: str,
-                      value: Union[str, int, float],
+                      value: Union[str, int, float, bool, None],
                       save: bool = True) -> None:
         """
         Update the given key/value pair in the config object. By default, this update will also be persisted to the
@@ -255,7 +342,19 @@ class AmazonOrdersConfig:
         :param value: The new value.
         :param save: ``True`` if the config should be persisted.
         """
+        previous_data = dict(self._data)
         self._data[key] = value
+        try:
+            self._validate_bs4_parser()
+            self._validate_class_paths()
+            self._load_classes()
+        except (AmazonOrdersError, AttributeError, ImportError):
+            self._data = previous_data
+            self._load_classes()
+            raise
+
+        self._assigned_classes.pop(key, None)
+        self._resolved_classes = {}
 
         if save:
             self.save()

@@ -12,6 +12,11 @@ If you would like to contribute to the code, the process is pretty simple:
 5. Ensure no linting errors were introduced by running ``make check``.
 6. Submit a `pull requests <https://help.github.com/en/articles/creating-a-pull-request-from-a-fork>`_ to get the changes merged.
 
+Languages other than English plug in through separately published language packages, so pull requests
+that add a language here won't be accepted. See `Language Packages
+<https://amazon-orders.readthedocs.io/language-packages.html>`_ for how to build one and get it listed in the
+docs.
+
 Also be sure to review the `Code of Conduct <https://github.com/alexdlaird/amazon-orders?tab=coc-ov-file#contributor-covenant-code-of-conduct>`_ before
 submitting issues or pull requests.
 

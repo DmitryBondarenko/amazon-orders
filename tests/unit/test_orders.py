@@ -150,6 +150,23 @@ class TestOrders(UnitTestCase):
         self.assertEqual(1, resp.call_count)
 
     @responses.activate
+    def test_get_order_history_csd_encrypted(self):
+        # GIVEN
+        self.amazon_session.is_authenticated = True
+        with open(os.path.join(self.RESOURCES_DIR, "orders", "order-history-csd-encrypted-siege.html"), "r",
+                  encoding="utf-8") as f:
+            resp = responses.add(responses.GET, f"{self.test_config.constants.ORDER_HISTORY_URL}?timeFilter=year-2026",
+                                 body=f.read(), status=200)
+
+        # WHEN
+        with self.assertRaises(AmazonOrdersError) as cm:
+            self.amazon_orders.get_order_history(year=2026, keep_paging=False)
+
+        # THEN
+        self.assertIn("encrypted", str(cm.exception))
+        self.assertEqual(1, resp.call_count)
+
+    @responses.activate
     def test_get_order_history_errors_with_meta(self):
         # GIVEN
         self.amazon_session.is_authenticated = True
@@ -389,6 +406,25 @@ class TestOrders(UnitTestCase):
         self.assertIsNotNone(order.order_details_link)
         self.assertEqual(date(2024, 12, 12), order.order_placed_date)
         self.assertEqual(0, len(order.items))  # Per-item details require the Whole Foods receipt page
+
+    @responses.activate
+    def test_get_order_history_item_count_with_thousands_separator(self):
+        # GIVEN
+        self.amazon_session.is_authenticated = True
+        with open(os.path.join(self.RESOURCES_DIR, "orders", "order-history-wholefoods.html"), "r",
+                  encoding="utf-8") as f:
+            responses.add(
+                responses.GET,
+                self.test_config.constants.ORDER_HISTORY_URL,
+                body=f.read().replace("10 items in this purchase", "1,234 items in this purchase"),
+                status=200,
+            )
+
+        # WHEN
+        orders = self.amazon_orders.get_order_history(year=2024, keep_paging=False)
+
+        # THEN
+        self.assertEqual(1234, orders[7].item_count)
 
     def _get_order_history_full_details_wholefoods(self,
                                                    whole_foods_details="order-details-fopo-147-7999693-6862434.html"):
@@ -856,6 +892,33 @@ class TestOrders(UnitTestCase):
         # THEN
         self.assertIn("encrypted", str(cm.exception))
 
+    def test_parse_order_history_csd_encrypted_siege(self):
+        # GIVEN
+        with open(os.path.join(self.RESOURCES_DIR, "orders", "order-history-csd-encrypted-siege.html"), "r",
+                  encoding="utf-8") as f:
+            html = f.read()
+
+        # WHEN
+        with self.assertRaises(AmazonOrdersError) as cm:
+            AmazonOrders.parse_order_history(html, self.test_config)
+
+        # THEN
+        self.assertIn("encrypted", str(cm.exception))
+
+    def test_parse_order_history_encrypted_field_in_readable_card(self):
+        # GIVEN
+        with open(os.path.join(self.RESOURCES_DIR, "orders", "order-history-multiple-recipients.html"), "r",
+                  encoding="utf-8") as f:
+            html = f.read().replace('<span class="a-color-secondary a-text-caps">Ship to</span>',
+                                    '<span class="a-color-secondary a-text-caps">Ship to</span>'
+                                    '<div class="csd-encrypted-sensitive"></div>', 1)
+
+        # WHEN
+        orders = AmazonOrders.parse_order_history(html, self.test_config)
+
+        # THEN
+        self.assertEqual(3, len(orders))
+
     def test_parse_order_history_no_js_fallback_is_not_encrypted(self):
         # GIVEN
         with open(os.path.join(self.RESOURCES_DIR, "orders", "order-details-fopo-113-4055495-4107437.html"), "r",
@@ -921,6 +984,32 @@ class TestOrders(UnitTestCase):
         self.assertEqual(1, len(order.items))
         self.assertEqual("Digital Item 01", order.items[0].title)
         self.assertEqual(2.73, order.items[0].price)
+        self.assertEqual(1, resp.call_count)
+
+    @responses.activate
+    def test_get_order_payment_instrument_layout(self):
+        # GIVEN
+        self.amazon_session.is_authenticated = True
+        order_id = "112-5234348-8033063"
+        with open(os.path.join(self.RESOURCES_DIR, "orders", f"order-details-{order_id}.html"), "r",
+                  encoding="utf-8") as f:
+            resp = responses.add(
+                responses.GET,
+                f"{self.test_config.constants.ORDER_DETAILS_URL}?orderID={order_id}",
+                body=f.read(),
+                status=200,
+            )
+
+        # WHEN
+        order = self.amazon_orders.get_order(order_id)
+
+        # THEN
+        self.assertEqual(order_id, order.order_number)
+        self.assertEqual("Blue Cash Everyday®", order.payment_method)
+        self.assertEqual("1234", order.payment_method_last_4)
+        self.assertEqual(54.78, order.grand_total)
+        self.assertEqual(50.97, order.subtotal)
+        self.assertEqual(3.81, order.estimated_tax)
         self.assertEqual(1, resp.call_count)
 
     @responses.activate

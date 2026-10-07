@@ -81,7 +81,7 @@ class AmazonSession:
         elif domain:
             config.set_domain(domain)
         if not auth_forms:
-            auth_forms = AmazonSession.default_auth_forms(config)
+            auth_forms = self.default_auth_forms(config)
             custom_forms = []
             for path in config.auth_forms_classes or []:
                 try:
@@ -186,9 +186,7 @@ class AmazonSession:
         :param kwargs: Remaining ``kwargs`` will be passed to :func:`requests.request`.
         :return: The response from the executed request.
         """
-        if "headers" not in kwargs:
-            kwargs["headers"] = {}
-        kwargs["headers"].update(self.config.constants.BASE_HEADERS)
+        kwargs["headers"] = {**self.config.constants.BASE_HEADERS, **(kwargs.get("headers") or {})}
 
         url_to_log = url
         if self.debug:
@@ -281,7 +279,7 @@ class AmazonSession:
             # TODO: BeautifulSoup doesn't let us query for #nav-item-signout, maybe because it's dynamic on the page,
             #  but we should find a better way to do this
             if self.auth_cookies_stored() or \
-                    ("Hello, sign in" not in last_response.response.text and
+                    (self.config.constants.SIGNED_OUT_TEXT not in last_response.response.text and
                      "nav-item-signout" in last_response.response.text):
                 self.is_authenticated = True
                 break
