@@ -320,7 +320,10 @@ class Selectors:
     TRACKING_ENTITY_SELECTOR = ["div.pt-main-container",
                                 "#pt-page-container-inner"]
     FIELD_TRACKING_NUMBER_SELECTOR = [".pt-delivery-card-trackingId"]
+    FIELD_TRACKING_NUMBER_PREFIX = "Tracking ID:"
     FIELD_TRACKING_CARRIER_SELECTOR = [".tracking-event-carrier-header"]
+    #: Matched case-insensitively and removed from the carrier header, e.g. "Shipped with UPS" -> "UPS".
+    FIELD_TRACKING_CARRIER_REGEX = r"^(?:shipped with|delivered by|delivery (?:facilitated )?by|carrier:?)\s+"
 
     #####################################
     # CSS selectors for Transaction fields

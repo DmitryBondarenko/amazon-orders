@@ -57,7 +57,7 @@ class Shipment(Parsable):
         if not self.tracking_link:
             return None
 
-        values = parse_qs(urlparse(self.tracking_link).query).get("shipmentId")
+        values = parse_qs(urlparse(self.tracking_link).query).get(self.config.constants.SHIPMENT_ID_QUERY_PARAM)
         return values[0] if values else None
 
     def _parse_items(self) -> List[Item]:

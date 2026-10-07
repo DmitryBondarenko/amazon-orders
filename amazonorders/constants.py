@@ -153,6 +153,7 @@ class Constants:
     ORDER_FILTER_QUERY_PARAM = "orderFilter"
     WHOLE_FOODS_DETAILS_ROUTES = ["/fopo/order-details", "/wholefoodsmarket/receipts/order/"]
     TRACKING_ROUTE = "/progress-tracker/package"
+    SHIPMENT_ID_QUERY_PARAM = "shipmentId"
     TRACKING_URL = f"{BASE_URL}{TRACKING_ROUTE}"
 
     ##########################################################################

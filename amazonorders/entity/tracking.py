@@ -13,10 +13,6 @@ from amazonorders.entity.parsable import Parsable
 
 logger = logging.getLogger(__name__)
 
-# The carrier header reads e.g. "Shipped with UPS" or "Delivery facilitated by Amazon".
-_CARRIER_PREFIX_REGEX = re.compile(r"^(?:shipped with|delivered by|delivery (?:facilitated )?by|carrier:?)\s+",
-                                   re.IGNORECASE)
-
 
 class Tracking(Parsable):
     """
@@ -49,8 +45,9 @@ class Tracking(Parsable):
             return None
 
         value = tag.text.strip()
-        if ":" in value:
-            value = value.split(":", 1)[1].strip()
+        prefix = self.config.selectors.FIELD_TRACKING_NUMBER_PREFIX
+        if prefix and prefix in value:
+            value = value.split(prefix, 1)[1].strip()
         return value or None
 
     def _parse_carrier(self) -> Optional[str]:
@@ -58,4 +55,5 @@ class Tracking(Parsable):
         if not value:
             return None
 
-        return _CARRIER_PREFIX_REGEX.sub("", str(value)).strip() or None
+        return re.sub(self.config.selectors.FIELD_TRACKING_CARRIER_REGEX, "", str(value),
+                      flags=re.IGNORECASE).strip() or None
