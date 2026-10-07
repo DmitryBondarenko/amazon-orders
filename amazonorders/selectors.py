@@ -285,7 +285,11 @@ class Selectors:
 
     FIELD_SHIPMENT_TRACKING_LINK_SELECTOR = ["span.track-package-button a",
                                              "a[href*='ship-track?itemId=']",
-                                             "a[href*='/progress-tracker/package']"]
+                                             # Not a bare '/progress-tracker/package': that also matches the
+                                             # '/progress-tracker/package/preship/cancel-items' link of a
+                                             # shipment that hasn't shipped yet
+                                             "a[href*='/progress-tracker/package?']",
+                                             "a[href*='/progress-tracker/package/ref=']"]
     FIELD_SHIPMENT_DELIVERY_STATUS_SELECTOR = ["div.js-shipment-info-container div.a-row",
                                                "span.delivery-box__primary-text",
                                                ".yohtmlc-shipment-status-primaryText",
